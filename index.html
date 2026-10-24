@@ -1,0 +1,93 @@
+<!doctype html><html lang="en"><head><script>if(localStorage.getItem('md-theme')=='light')document.documentElement.classList.add('light')</script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Master Dashboard · Steve</title>
+<style>
+:root{--bg:#000;--card:#111;--bd:#262a33;--tx:#e6e8ee;--mut:#8a91a3;--ln:#1c1f27;--a:#9ec1ff}
+html.light{--bg:#f5f6f8;--card:#fff;--bd:#d8dce3;--tx:#14161b;--mut:#5b6272;--ln:#eceef2;--a:#1f5fd1}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 18px;background:var(--card);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:2}
+h1{font-size:18px;margin:0;font-weight:650}.tag{font-size:12px;color:var(--mut);margin-left:auto}
+a{color:var(--a)}a.btn{text-decoration:none;border:1px solid var(--bd);border-radius:8px;padding:5px 9px;font-size:13px;white-space:nowrap}
+main{padding:16px;max-width:1400px;margin:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.top{display:flex;align-items:center;gap:8px}.nm{font-weight:650;font-size:16px}.tk{color:var(--mut);font-size:13px}.top a{margin-left:auto}
+.px{font-size:26px;font-weight:700;margin:8px 0 2px}.up{color:#1fa463}.dn{color:#ff6b6b}.mut{color:var(--mut);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}td{padding:4px 0;border-top:1px solid var(--ln);vertical-align:top}td:last-child{text-align:right}
+.pill{display:inline-block;font-size:11px;padding:2px 7px;border-radius:99px;border:1px solid}
+.ok{color:#3ddc84;border-color:#2e6b48}.warn{color:#ffc857;border-color:#6b5a2e}.bad{color:#ff6b6b;border-color:#6b2e2e}
+h2{font-size:15px;margin:22px 0 10px}ul{margin:0;padding-left:18px;font-size:14px;line-height:1.6}
+.sum{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}.sum div{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px 12px;font-size:13px}
+@media(max-width:600px){main{padding:10px}.tag{width:100%;margin:0}}
+button.btn{background:none;color:var(--a);border:1px solid var(--bd);border-radius:8px;padding:5px 9px;font-size:13px;cursor:pointer}
+html.light .warn{color:#9a6a00;border-color:#d9b25c}html.light .ok{color:#127a45}
+</style></head><body>
+<header><h1>🧭 Master Dashboard</h1><a class="btn" href="https://hugoztian.github.io/investment-dashboard/">Investment hub</a><button class="btn" id="th" onclick="const l=document.documentElement.classList.toggle('light');localStorage.setItem('md-theme',l?'light':'dark');this.textContent=l?'☾ Dark':'☀ Light'">☀ Light</button><span class="tag" id="clock">Hugo Tian · USD · SGT</span></header>
+<main>
+<div class="sum" id="sum"></div>
+<div class="grid" id="grid"></div>
+<h2>Open issues</h2>
+<ul>
+<li><b>Alphabet</b> and <b>Berkshire</b> dashboards are built but waiting on your OK to publish (goog-dashboard / brkb-dashboard are 404 right now).</li>
+<li><b>5 repos waiting on your Cloudflare import</b>: tsla-dashboard, lmnd-dashboard, spcx-dashboard (spcx-quote), nvda-dashboard (nvda-dashboard-quote), meta-dashboard. Until then they use Micron's feed.</li>
+<li><b>Berkshire</b>: live book value per B share is about <b>$352.8</b> and P/B is about <b>1.54x</b>. Both are the bot's own estimates, not reported figures. There's no live BRK.B price here yet because Micron's feed doesn't carry BRK.B.</li>
+<li>The Investment hub is still a preview and isn't published.</li>
+</ul>
+<p class="mut">Prices come from Micron's Cloudflare Worker (Robinhood 24h feed, falling back to Nasdaq) and refresh every 30s. KPIs are read live from each dashboard's data.js. "WS" = Wall Street/third-party and "Mgmt" = company guidance. "—" means no data is available. Scans run Mon–Sat, none on Sunday.</p>
+</main>
+<script>
+if(document.documentElement.classList.contains('light'))document.getElementById('th').textContent='☾ Dark';
+const MICRON='https://micron-dashboard.cashcache.workers.dev/api/quote';
+// id,name,symbol,url,live,own-worker,scan time SGT,data global
+const C=[
+["mu","Micron","MU",1,"micron-dashboard","8:40","MU_DATA"],
+["goog","Alphabet","GOOG",0,"goog-dashboard","8:30",null],
+["nvda","Nvidia","NVDA",1,"nvda-dashboard-quote","8:23","NVDA_DATA"],
+["spcx","SpaceX","SPCX",1,"spcx-quote","7:48","SPCX_DATA"],
+["tsla","Tesla","TSLA",1,"tsla-dashboard","7:55","TSLA_DATA"],
+["meta","Meta","META",1,"meta-dashboard","8:30","META_DATA"],
+["lmnd","Lemonade","LMND",1,"lmnd-dashboard","8:10","LMND_DATA"],
+["brkb","Berkshire","BRK.B",0,"brkb-dashboard","pending",null]];
+const url=id=>`https://hugoztian.github.io/${id}-dashboard/`;
+const D='—',f=(x,d=2)=>x==null||isNaN(x)?D:(+x).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d});
+const big=x=>x==null?D:x>=1e12?'$'+f(x/1e12)+'T':'$'+f(x/1e9,1)+'B';
+const sgt=t=>new Date(t).toLocaleString('en-GB',{timeZone:'Asia/Singapore',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+' SGT';
+const S={};
+// KPI extraction per dashboard (from data.js); only fields the bots publish
+function kpi(id,d){const k={};if(!d)return k;try{
+if(id=='mu'){k.built=d.meta.built_sgt;const g=d.kpi.guide_eps;k.fpe=g?{v:null,eps:g*4,lab:'Fwd P/E (Mgmt, FQ1 guide ×4)'}:null;k.earn=(d.kpi.next_earn||{}).third_party||d.kpi.next_earnings;}
+if(id=='nvda'){k.built=d.built+' SGT';const p=(d.cons.periods||[]).find(x=>x.p=='0y');if(p)k.fpe={eps:p.eps,lab:'Fwd P/E (WS, FY27 cons. as of '+d.cons.as_of+')'};const n=d.cons.next_earnings;k.earn=n?n.date+' ('+n.status.split(':')[0]+')':null;}
+if(id=='spcx'){k.built=d.meta.built_sgt;k.shares=d.price.shares_m*1e6;k.earn=d.meta.next_earnings;k.extra='P/B '+d.price.pb+'x (WS, '+d.price.close_date+')';}
+if(id=='tsla'){k.built=d.meta.built_sgt;k.shares=d.price.shares_bn*1e9;k.ttm='Trailing P/E (WS) '+d.price.pe+' / fwd '+d.price.fpe+' @ '+d.price.close_date;k.earn=d.meta.next_earnings;}
+if(id=='meta'){k.built=d.built_sgt+' SGT';const g=(d.ov||[]).find(x=>/guide/i.test(x.k)&&/revenue/i.test(x.k));k.extra=g?g.k+' (Mgmt): '+g.v:null;}
+if(id=='lmnd'){k.built=d.meta.built_sgt;const s=d.fin.bs.series['Shares outstanding EOP (m)'];k.shares=s[s.length-1]*1e6;k.earn=d.meta.next_earnings+(d.meta.next_earnings_confirmed?' (confirmed)':'');}
+}catch(e){}return k}
+function load(c){return new Promise(r=>{if(!c[6]||!c[3])return r();const s=document.createElement('script');s.src=url(c[0])+'data.js?t='+Date.now();s.onload=s.onerror=()=>r();document.head.appendChild(s)})}
+async function own(c){try{const r=await fetch(`https://${c[4]}.cashcache.workers.dev/api/quote?symbol=${c[2]}`,{cache:'no-store'});return r.ok}catch(e){return false}}
+async function quote(c){if(c[2]=='BRK.B')return null;try{const r=await fetch(MICRON+'?symbol='+c[2]+'&t='+Date.now(),{cache:'no-store'});const j=await r.json();return j.ok?j:null}catch(e){return null}}
+function render(){
+ const g=document.getElementById('grid');g.innerHTML='';let ok=0,fb=0;
+ for(const c of C){const s=S[c[0]]||{},q=s.q,k=s.k||{};const m=q&&q.main,rg=q&&q.regular;
+  const price=m?m.price:null,dc=rg?rg.change:null,dp=rg?rg.pct:null;
+  let feed;if(c[0]=='mu'||s.own){feed='<span class="pill ok">Own worker live</span>';ok++}else if(!c[3]){feed='<span class="pill bad">Not published</span>'}else if(q){feed='<span class="pill warn">Micron fallback · Cloudflare import pending</span>';fb++}else feed='<span class="pill bad">No feed</span>';
+  const mc=k.shares&&price?big(k.shares*price):D;
+  const fpe=k.fpe&&price&&k.fpe.eps?`${k.fpe.lab}: ${f(price/k.fpe.eps,1)}x`:null;
+  const day=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Singapore',weekday:'short'});
+  const scan=c[5]=='pending'?'Pending':(day=='Sun'?'No scan Sun':`Mon–Sat ${c[5]} SGT`);
+  g.insertAdjacentHTML('beforeend',`<div class="card"><div class="top"><span class="nm">${c[1]}</span><span class="tk">${c[2]}</span><a class="btn" href="${url(c[0])}" target="_blank" rel="noopener">Open ↗</a></div>
+  <div class="px">${price!=null?'$'+f(price):D}</div>
+  <div class="${dc>0?'up':dc<0?'dn':'mut'}">${dc!=null?(dc>0?'+':'')+f(dc)+' ('+(dp>0?'+':'')+f(dp)+'%) day':D}</div>
+  <div class="mut">${m?`${m.label} · ${m.time_et}`+(m.label!='Regular'&&m.pct!=null?` · ext ${m.pct>0?'+':''}${f(m.pct)}%`:''):''}</div>
+  <table><tr><td>Live feed</td><td>${feed}</td></tr>
+  <tr><td>Market cap</td><td>${mc}</td></tr>
+  <tr><td>P/E</td><td>${[k.ttm,fpe].filter(Boolean).join('<br>')||D}</td></tr>
+  ${k.extra?`<tr><td>Note</td><td>${k.extra}</td></tr>`:''}
+  ${c[0]=='brkb'?'<tr><td>Live BVPS (B)</td><td>~$352.8 · P/B ~1.54x (bot est.)</td></tr>':''}
+  <tr><td>Next earnings</td><td>${k.earn||D}</td></tr>
+  <tr><td>Scan schedule</td><td>${scan}</td></tr>
+  <tr><td>Last data build</td><td>${k.built||D}</td></tr>
+  <tr><td>YouTube / video</td><td>${D}</td></tr></table></div>`)}
+ document.getElementById('sum').innerHTML=`<div>Dashboards live: <b>${C.filter(c=>c[3]).length}/8</b></div><div>Own feed: <b>${ok}</b></div><div>On Micron fallback: <b>${fb}</b></div><div>Updated ${sgt(Date.now())}</div>`;
+}
+async function tick(){await Promise.all(C.map(async c=>{S[c[0]]=S[c[0]]||{};S[c[0]].q=await quote(c);if(c[0]!='mu'&&c[3])S[c[0]].own=await own(c)}));render()}
+(async()=>{await Promise.all(C.map(load));for(const c of C){S[c[0]]={k:kpi(c[0],c[6]&&window[c[6]])}}render();tick();setInterval(tick,30000)})();
+</script></body></html>
