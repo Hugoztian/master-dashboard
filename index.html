@@ -38,8 +38,8 @@ html.light .warn{color:#9a6a00;border-color:#d9b25c}html.light .ok{color:#127a45
 <div class="grid" id="grid"></div>
 <h2>Open issues</h2>
 <ul>
-<li><b>5 repos waiting on your Cloudflare import</b>: tsla-dashboard, lmnd-dashboard, spcx-dashboard (spcx-quote), nvda-dashboard (nvda-dashboard-quote), meta-dashboard. Until then they use Micron's feed.</li>
-<li><b>Berkshire</b>: live book value per B share is about <b>$352.8</b> and P/B is about <b>1.54x</b>. Both are the bot's own estimates, not reported figures. There's no live BRK.B price here yet because Micron's feed doesn't carry BRK.B.</li>
+<li><b>6 repos waiting on your Cloudflare import</b>: tsla-dashboard, lmnd-dashboard, spcx-dashboard (spcx-quote), nvda-dashboard (nvda-dashboard-quote), meta-dashboard, brkb-dashboard. Until then they use Micron's feed. Micron's allowlist includes BRK.B, so Berkshire's price is on that shared feed.</li>
+<li><b>Berkshire book value</b>: BV per B share on the card is 30 Jun 2026 10-Q equity ÷ Class B-equivalent shares from data.js (a reported figure). Live marked BV and P/E are not published in data.js, so those stay blank.</li>
 </ul>
 <p class="mut">Prices come from Micron's Cloudflare Worker (Robinhood 24h feed, falling back to Nasdaq) and refresh every 30s. KPIs are read live from each dashboard's data.js. "WS" = Wall Street/third-party and "Mgmt" = company guidance. "—" means no data is available. Scans run Mon–Sat, none on Sunday.</p>
 </div>
@@ -59,11 +59,12 @@ const C=[
 ["tsla","Tesla","TSLA",1,"tsla-dashboard","7:55","TSLA_DATA"],
 ["meta","Meta","META",1,"meta-dashboard","8:30","META_DATA"],
 ["lmnd","Lemonade","LMND",1,"lmnd-dashboard","8:10","LMND_DATA"],
-["brkb","Berkshire","BRK.B",1,"brkb-dashboard","pending","BRK_DATA"]];
+["brkb","Berkshire","BRK.B",1,"brkb-dashboard","9:00","BRK_DATA"]];
 // extra feeds for What's new only (no card)
 const X=[["ai-datacenter","AI Datacenter","AI DC",1,"ai-datacenter-dashboard","",["AIDC","AI_DC_DATA","DC_DATA","AIDATA_DATA"]]];
 const esc=t=>String(t??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
-function wnItems(d){if(!d)return[];const a=d.whatsNewThisWeek||d.whats_new_this_week||(d.meta&&d.meta.whatsNewThisWeek)||(d.news&&d.news.whatsNewThisWeek);return Array.isArray(a)?a.map(i=>typeof i=="string"?{headline:i}:i).filter(i=>i&&i.headline):[]}
+function wnItems(d){if(!d)return[];let a=d.whatsNewThisWeek||d.whats_new_this_week||(d.meta&&(d.meta.whatsNewThisWeek||d.meta.whats_new_this_week));if(!Array.isArray(a)&&d.news&&Array.isArray(d.news.whatsNewThisWeek))a=d.news.whatsNewThisWeek;if(!Array.isArray(a)&&Array.isArray(d.news)&&d.news.length&&Array.isArray(d.news[0]))a=d.news;if(!Array.isArray(a))return[];return a.map(i=>typeof i=="string"?{headline:i}:Array.isArray(i)?{date:i[0],headline:i[1],url:i[2],detail:i[3]}:i).filter(i=>i&&i.headline);}
+function wnRecent(items){const n=Date.now();return (items||[]).filter(i=>{const t=Date.parse(String(i.date||"").slice(0,10));return !isFinite(t)||(n-t)/864e5<=7.5}).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));}
 const W={};
 function showTab(name){const ov=name==="overview";document.getElementById("panelOverview").classList.toggle("on",ov);document.getElementById("panelWn").classList.toggle("on",!ov);document.getElementById("tabOverview").classList.toggle("on",ov);document.getElementById("tabWn").classList.toggle("on",!ov);try{history.replaceState(null,"","#"+(ov?"overview":"whats-new"))}catch(e){}}
 const ACC={mu:"#7828D0",goog:"#1a73e8",nvda:"#76b900",spcx:"#005288",tsla:"#cc0000",meta:"#0064E0",lmnd:"#FF0083",brkb:"#2E3192","ai-datacenter":"#5B5CE6"};
@@ -82,10 +83,12 @@ if(id=='spcx'){k.built=d.meta.built_sgt;k.shares=d.price.shares_m*1e6;k.earn=d.m
 if(id=='tsla'){k.built=d.meta.built_sgt;k.shares=d.price.shares_bn*1e9;k.ttm='Trailing P/E (WS) '+d.price.pe+' / fwd '+d.price.fpe+' @ '+d.price.close_date;k.earn=d.meta.next_earnings;}
 if(id=='meta'){k.built=d.built_sgt+' SGT';const g=(d.ov||[]).find(x=>/guide/i.test(x.k)&&/revenue/i.test(x.k));k.extra=g?g.k+' (Mgmt): '+g.v:null;}
 if(id=='lmnd'){k.built=d.meta.built_sgt;const s=d.fin.bs.series['Shares outstanding EOP (m)'];k.shares=s[s.length-1]*1e6;k.earn=d.meta.next_earnings+(d.meta.next_earnings_confirmed?' (confirmed)':'');}
+if(id=='brkb'){if(d.built_sgt)k.built=d.built_sgt+' SGT';const note=String((d.shares&&d.shares.note)||'');const mm=note.match(/×\s*([\d,]+)/);const mult=mm?+mm[1].replace(/,/g,''):NaN;if(d.shares&&d.shares.a_eq&&isFinite(mult)&&mult>0)k.shares=d.shares.a_eq*mult;const eq=d.bs&&d.bs.equity;if(eq!=null&&isFinite(+eq)&&k.shares){k.bvBqe=+eq*1e6/k.shares;k.qe=d.qe||'';}const n=d.next||{};if(n.date)k.earn=n.date+(/confirm/i.test(n.note||'')?' (confirmed)':'');}
 }catch(e){}return k}
-function load(c){return new Promise(r=>{if(!c[6]||!c[3])return r();const s=document.createElement('script');s.src=url(c[0])+'data.js?t='+Date.now();s.onload=s.onerror=()=>r();document.head.appendChild(s)})}
-async function own(c){try{const r=await fetch(`https://${c[4]}.cashcache.workers.dev/api/quote?symbol=${c[2]}`,{cache:'no-store'});return r.ok}catch(e){return false}}
-async function quote(c){if(c[2]=='BRK.B')return null;try{const r=await fetch(MICRON+'?symbol='+c[2]+'&t='+Date.now(),{cache:'no-store'});const j=await r.json();return j.ok?j:null}catch(e){return null}}
+function load(c){return new Promise(r=>{if(!c[6]||!c[3])return r();const before=new Set(Object.keys(window));const s=document.createElement('script');s.src=url(c[0])+'data.js?t='+Date.now();s.onload=()=>{let d=window[c[6]];if(!d){const k=Object.keys(window).find(k=>!before.has(k)&&window[k]&&typeof window[k]=='object');d=k&&window[k]}c._d=d||null;r()};s.onerror=()=>{c._d=null;r()};document.head.appendChild(s)})}
+async function quoteJson(u){try{const r=await fetch(u,{cache:'no-store',signal:AbortSignal.timeout(8000)});if(!r.ok)return null;const j=await r.json();return j&&j.ok&&j.main&&j.main.price!=null?j:null}catch(e){return null}}
+async function own(c){try{const r=await fetch(`https://${c[4]}.cashcache.workers.dev/api/quote?symbol=${encodeURIComponent(c[2])}&t=${Date.now()}`,{cache:'no-store',signal:AbortSignal.timeout(8000)});if(!r.ok)return false;const j=await r.json();return !!(j&&j.ok&&j.main&&j.main.price!=null)}catch(e){return false}}
+async function quote(c){const sym=encodeURIComponent(c[2]);if(c[0]!=='mu'&&c[4]){const ownQ=await quoteJson(`https://${c[4]}.cashcache.workers.dev/api/quote?symbol=${sym}&t=${Date.now()}`);if(ownQ)return ownQ}return quoteJson(MICRON+'?symbol='+sym+'&t='+Date.now())}
 function render(){
  const g=document.getElementById('grid');g.innerHTML='';let ok=0,fb=0;
  for(const c of C){const s=S[c[0]]||{},q=s.q,k=s.k||{};const m=q&&q.main,rg=q&&q.regular;
@@ -94,7 +97,9 @@ function render(){
   const mc=k.shares&&price?big(k.shares*price):D;
   const fpe=k.fpe&&price&&k.fpe.eps?`${k.fpe.lab}: ${f(price/k.fpe.eps,1)}x`:null;
   const day=new Date().toLocaleDateString('en-US',{timeZone:'Asia/Singapore',weekday:'short'});
-  const scan=c[5]=='pending'?'Pending':(day=='Sun'?'No scan Sun':`Mon–Sat ${c[5]} SGT`);
+  const scan=!c[5]||c[5]=='pending'?'Pending':(day=='Sun'?'No scan Sun':`Mon–Sat ${c[5]} SGT`);
+  const bv=k.bvBqe!=null?('$'+f(k.bvBqe)+(k.qe?' · 10-Q '+esc(k.qe):'')+(price!=null?' · P/B '+f(price/k.bvBqe,2)+'x on that book':'')):D;
+  const wn=wnRecent(W[c[0]]).slice(0,2);
   g.insertAdjacentHTML('beforeend',`<div class="card"><div class="top"><span class="nm">${c[1]}</span><span class="tk">${c[2]}</span><a class="btn" href="${url(c[0])}" target="_blank" rel="noopener">Open ↗</a></div>
   <div class="px">${price!=null?'$'+f(price):D}</div>
   <div class="${dc>0?'up':dc<0?'dn':'mut'}">${dc!=null?(dc>0?'+':'')+f(dc)+' ('+(dp>0?'+':'')+f(dp)+'%) day':D}</div>
@@ -103,14 +108,14 @@ function render(){
   <tr><td>Market cap</td><td>${mc}</td></tr>
   <tr><td>P/E</td><td>${[k.ttm,fpe].filter(Boolean).join('<br>')||D}</td></tr>
   ${k.extra?`<tr><td>Note</td><td>${k.extra}</td></tr>`:''}
-  ${c[0]=='brkb'?'<tr><td>Live BVPS (B)</td><td>~$352.8 · P/B ~1.54x (bot est.)</td></tr>':''}
+  ${c[0]=='brkb'?`<tr><td>BVPS (B)</td><td>${bv}</td></tr>`:''}
   <tr><td>Next earnings</td><td>${k.earn||D}</td></tr>
   <tr><td>Scan schedule</td><td>${scan}</td></tr>
   <tr><td>Last data build</td><td>${k.built||D}</td></tr>
-  ${(W[c[0]]||[]).length?`<tr><td>What’s new</td><td>${(W[c[0]]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).slice(0,2).map(i=>esc(i.headline)).join('<br>')}</td></tr>`:''}
+  ${wn.length?`<tr><td>What’s new</td><td>${wn.map(i=>esc(i.headline)).join('<br>')}</td></tr>`:''}
   <tr><td>YouTube / video</td><td>${D}</td></tr></table></div>`)}
  document.getElementById('sum').innerHTML=`<div>Dashboards live: <b>${C.filter(c=>c[3]).length}/8</b></div><div>Own feed: <b>${ok}</b></div><div>On Micron fallback: <b>${fb}</b></div><div>Updated ${sgt(Date.now())}</div>`;
 }
 async function tick(){await Promise.all(C.map(async c=>{S[c[0]]=S[c[0]]||{};S[c[0]].q=await quote(c);if(c[0]!='mu'&&c[3])S[c[0]].own=await own(c)}));render()}
-(async()=>{await Promise.all([...C.map(load),...X.map(loadX)]);for(const c of C){const d=c[6]&&window[c[6]];S[c[0]]={k:kpi(c[0],d)};W[c[0]]=wnItems(d)}renderWN();render();if(/whats-new/i.test(location.hash))showTab('wn');tick();setInterval(tick,30000)})();
+(async()=>{await Promise.all([...C.map(load),...X.map(loadX)]);for(const c of C){const d=c._d||(c[6]&&window[c[6]]);S[c[0]]={k:kpi(c[0],d)};W[c[0]]=wnItems(d)}renderWN();render();if(/whats-new/i.test(location.hash))showTab('wn');tick();setInterval(tick,30000)})();
 </script></body></html>
